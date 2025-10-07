@@ -4,12 +4,33 @@
 
 using namespace std;
 
+typedef struct Point
+{
+	int x;
+	int y;
+}Point;
+
+typedef struct Memory
+{
+	Point pos;
+	int card_num;
+}Memory;
+
+//マウスカーソルがトランプの上にあるかチェックする関数
+bool CheckOnTrump(Point, Point, int, int);
+
+//めくった二枚のトランプが同じ数字かチェックする関数
+bool CheckEqualTrump(int, int, int);
+
+//ランダム生成関数
+int Random(int);
+
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 	_In_ LPSTR lpCmdLine, _In_ int nShowCmd)
 {
 	SetOutApplicationLogValidFlag(false);//ログ出力オフ
 	ChangeWindowMode(TRUE); //ウィンドウモード切り替え
-	SetGraphMode(1280,720, 32); //ウィンドウサイズ
+	SetGraphMode(1280, 720, 32); //ウィンドウサイズ
 
 	if (DxLib_Init() == -1) { //DXライブラリ初期化処理
 		return -1;			  //エラーが起きたら直ちに終了
@@ -19,39 +40,76 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 	SetWindowText("toranpu"); //ウィンドウの名前
 
 	//定数
-	int MAX_CARD{ 53 };
-	int CARD_WIDTH{ 64 };
-	int CARD_HEIGHT{ 92 };
-	int CARD_START_X{ 100 };
-	int CARD_START_Y{ 125 };
+	constexpr int MAX_CARD{ 53 };			//トランプの枚数
+	constexpr int CARD_WIDTH{ 64 };			//トランプ１枚の横幅
+	constexpr int CARD_HEIGHT{ 92 };		//トランプ１枚の立幅
+	constexpr Point CARD_START{ 100,100 };	//左上のトランプの座標
+	constexpr int CARD_SPACE{ 20 };			//トランプとトランプの間隔
+	constexpr int REVERSE_CARD{ 1 };		//裏面のトランプの数
+	constexpr int CUT_X{ 13 };				//横方向のトランプの数
+	constexpr int CUT_Y{ 5 };				//縦方向のトランプの数
+	constexpr int TURN_TIME{ 2 };			//１ターンにめくるトランプの枚数
+	constexpr int NEXT_INTERVAL{ 60 };		//次のターンまでの時間
+	constexpr int CPU_TURN_TIME{ 30 };		//ＣＰＵのトランプをめくるまでの時間
 
 	//変数
-	vector<int> cards;
+	Point mouse;							//マウスの座標
+	vector<Memory> cards;						//トランプの情報を保存用
+	bool player = true;						//ターンチェック
+	bool turn[MAX_CARD - REVERSE_CARD];		//トランプがめくられているか
+	bool onclick = false;					//左クリックがされているか
+	int turn_num = 0;						//そのターンで何枚めくられているか
+	Memory ptm[2];							//プレイヤーがそのターンにめくったトランプを二枚分保存用
+	Memory ctm[2];							//ＣＰＵがそのターンにめくったトランプを二枚分保存用
+	vector<Memory> ccm;						//過去10枚のめくられたトランプを記憶用
+	bool equal_card = false;				//同じトランプがめくられたか
+	int next_turn = 0;						//次のターンに行くまでの時間の計測用
+	int player_get = 0;						//プレイヤーが揃えたトランプの数
+	int cpu_get = 0;						//ＣＰＵが揃えたトランプの数
+	int cturn_num = 0;						//ＣＰＵがトランプをめくるまでの時間の計測用
+	int cturn_card = 0;						//ＣＰＵがめくるトランプの数字の保存用
 
 	//画像---------------------
 	int bg;//背景
+	int cg;//丸
 	//画像読み込み
 	bg = LoadGraph("image\\back.png");
+	cg = LoadGraph("image\\circle.png");
 
 	//画像の分割読み込み
 	//LoadDivGraph(画像ファイルポインタ、分割総数、横分割数、縦分割数、横サイズ、縦サイズ、保存配列ポインタ)
 	//トランプの横サイズ：64、縦サイズ：92
-	int tg[53];
-	LoadDivGraph("image\\card.png", MAX_CARD, 13, 5, CARD_WIDTH, CARD_HEIGHT, tg);
+	int tg[MAX_CARD];
+	LoadDivGraph("image\\card.png", MAX_CARD, CUT_X, CUT_Y, CARD_WIDTH, CARD_HEIGHT, tg);
 
-	int mouseX, mouseY;//カーソル位置保存用
+	//トランプの座標を初期化
+	Point ini{ 0,0 };
 
-	//
-	for (int i = 0; i < MAX_CARD - 1; i++)
+	//トランプの情報を初期化
+	for (int i = 0; i < MAX_CARD - REVERSE_CARD; i++)
 	{
-		cards.push_back(i);
+		Memory m{ ini,i };
+		cards.push_back(m);
 	}
-
+	//トランプをランダム配置
 	random_device rd;
 	mt19937 mt(rd());
 	shuffle(cards.begin(), cards.end(), mt);
 
-	while (1) 
+	//トランプの順番によって再度座標を初期化
+	for (int i = 0; i < MAX_CARD - REVERSE_CARD; i++)
+	{
+		Point p{ i % CUT_X,i / CUT_X };
+		cards[i].pos = p;
+	}
+
+	//トランプをすべてめくられていない状態にする
+	for (int i = 0; i < MAX_CARD - REVERSE_CARD; i++)
+	{
+		turn[i] = false;
+	}
+
+	while (1)
 	{
 		//裏画面のデータを全て削除
 		ClearDrawScreen();
@@ -59,20 +117,153 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 		//処理----------------------------------------------------------------
 
 		//マウスカーソルの位置を取得
-		GetMousePoint(&mouseX, &mouseY);
+		GetMousePoint(&mouse.x, &mouse.y);
 
+		//トランプを二枚めくった時に一時的に停止してトランプの数字を見やすくする
+		if (next_turn > 0)
+		{
+			next_turn--;
+		}
+		if (next_turn == 0)
+		{
+			//違うカードをめくっていたらめくったトランプを裏面に戻す
+			if (!equal_card && turn_num > TURN_TIME)
+			{
+				for (int i = 0; i < TURN_TIME; i++)
+					turn[ptm[i].pos.x + ptm[i].pos.y * CUT_X] = false;
+			}
+			else
+				equal_card = false;
+			if (!player)
+				cturn_num--;
+			turn_num = 0;
+			next_turn--;
+		}
 
+		//ゲーム
+		if (player)
+		{
+			//プレイヤーのターン
+			if (turn_num < TURN_TIME)
+			{
+				//左クリックする
+				if ((GetMouseInput() & MOUSE_INPUT_LEFT) && !onclick)
+				{
+					for (int y = 0; y < CUT_Y - REVERSE_CARD; y++)
+					{
+						for (int x = 0; x < CUT_X; x++)
+						{
+							for (auto i = 0; i < cards.size(); i++)
+							{
+								if (cards[i].pos.x == x && cards[i].pos.y == y)
+								{
+									Point p{ x * CARD_WIDTH + CARD_SPACE * x + CARD_START.x,y * CARD_HEIGHT + CARD_SPACE * y + CARD_START.y };
+									//Point pos{ x,y };
+									//まだめくられていないトランプをめくる
+									if (CheckOnTrump(mouse, p, CARD_WIDTH, CARD_HEIGHT) && !turn[x + y * CUT_X])
+									{
+										turn[x + y * CUT_X] = true;
+										ptm[turn_num] = cards[i];
+										turn_num++;
+										break;
+									}
+								}
+							}
+						}
+					}
+				}
+				onclick = (GetMouseInput() & MOUSE_INPUT_LEFT);
+			}
+			//トランプを二回めくった
+			else if (turn_num == TURN_TIME)
+			{
+				//めくった二枚のトランプの数字を見る
+				if (CheckEqualTrump(ptm[0].card_num, ptm[1].card_num, CUT_X))
+				{
+					//同じ数字なら正解の丸を表示する
+					equal_card = true;
+					next_turn = NEXT_INTERVAL;
+					cards.erase(cards.begin() + ptm[0].pos.x + ptm[0].pos.y * CUT_X);
+					cards.erase(cards.begin() + ptm[1].pos.x + ptm[1].pos.y * CUT_X);
+					turn_num++;
+				}
+				else
+				{
+					//違う数字なら何も表示しない
+					next_turn = NEXT_INTERVAL;
+					turn_num++;
+					player = false;
+				}
+			}
+		}
+		else
+		{
+			//CPUのターン
+			if (turn_num < TURN_TIME)
+			{
+				if (cturn_num < 0)
+				{
+					//トランプをめくる
+					do
+					{
+						cturn_card = Random(cards.size());
+						//トランプがめくられていなかったらめくる
+						if (!turn[cards[cturn_card].pos.x + cards[cturn_card].pos.y * CUT_X])
+						{
+							turn[cards[cturn_card].pos.x + cards[cturn_card].pos.y * CUT_X] = true;
+							ctm[turn_num] = cards[cturn_card];
+							turn_num++;
+							cturn_num = CPU_TURN_TIME;
+							break;
+						}
+					} while (true);
+				}
+			}
+			//トランプを２回めくった
+			else if (turn_num == TURN_TIME)
+			{
+				//めくった二枚のトランプの数字を見る
+				if (CheckEqualTrump(ctm[0].card_num, ctm[1].card_num, CUT_X))
+				{
+					//同じ数字なら正解の丸を表示する
+					equal_card = true;
+					next_turn = NEXT_INTERVAL;
+					cards.erase(cards.begin() + ctm[0].pos.x + ctm[0].pos.y * CUT_X);
+					cards.erase(cards.begin() + ctm[1].pos.x + ctm[1].pos.y * CUT_X);
+					turn_num++;
+				}
+				else
+				{
+					//違う数字なら何も表示しない
+					next_turn = NEXT_INTERVAL;
+					turn_num++;
+					player = true;
+				}
+			}
+		}
 
 		//画像の描画(位置X、位置Y、グラフィックハンドル、透明度の有効無効)
 		//背景
 		DrawGraph(0, 0, bg, true);
 
-		for (int y = 0; y < 4; y++)
+		//トランプの表示
+		for (int y = 0; y < CUT_Y - REVERSE_CARD; y++)
 		{
-			for (int x = 0; x < 13; x++)
+			for (int x = 0; x < CUT_X; x++)
 			{
-				DrawGraph(x * CARD_WIDTH + 20 * x + CARD_START_X, y * CARD_HEIGHT + 20 * y + CARD_START_Y, tg[52], true);
+				//めくられてなかったら裏面を表示
+				if (!turn[x + y * CUT_X])
+					DrawGraph(x * CARD_WIDTH + CARD_SPACE * x + CARD_START.x, y * CARD_HEIGHT + CARD_SPACE * y + CARD_START.y, tg[52], true);
+				//めくられていたら表面を表示
+				else
+					DrawGraph(x * CARD_WIDTH + CARD_SPACE * x + CARD_START.x, y * CARD_HEIGHT + CARD_SPACE * y + CARD_START.y, tg[cards[x + y * CUT_X].card_num], true);
 			}
+		}
+
+		//同じトランプをめくっていたら正解の丸を表示
+		if (equal_card)
+		{
+			DrawGraph(0, 0, cg, true);
 		}
 
 		//--------------------------------------------------------------------
@@ -87,10 +278,35 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 
 	//画像データ削除
 	DeleteGraph(bg);
+	DeleteGraph(cg);
 	for (int i = 0; i < MAX_CARD; i++)
 		DeleteGraph(tg[i]);
 
 	WaitKey();	 //キー入力待ち
 	DxLib_End(); //DXライブラリ使用の終了処理
 	return 0;
+}
+
+bool CheckOnTrump(Point mp, Point cp, int cw, int ch)
+{
+	if (mp.x > cp.x && mp.x < cp.x + cw && mp.y>cp.y && mp.y < cp.y + ch)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+bool CheckEqualTrump(int c1, int c2, int cutx)
+{
+	if (c1 % cutx == c2 % cutx)
+		return true;
+
+	return false;
+}
+
+int Random(int max)
+{
+	int min = 0;
+	return rand() % (max - min + 1) + min;
 }
