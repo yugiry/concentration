@@ -69,6 +69,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 	int cturn_num = 0;						//ＣＰＵがトランプをめくるまでの時間の計測用
 	int cturn_card = 0;						//ＣＰＵがめくるトランプの数字の保存用
 
+	int num = 0;
+
 	//画像---------------------
 	int bg;//背景
 	int cg;//丸
@@ -130,14 +132,30 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 			if (!equal_card && turn_num > TURN_TIME)
 			{
 				for (int i = 0; i < TURN_TIME; i++)
-					turn[ptm[i].pos.x + ptm[i].pos.y * CUT_X] = false;
+				{
+					if (!player)
+						turn[ptm[i].pos.x + ptm[i].pos.y * CUT_X] = false;
+					else
+						turn[ctm[i].pos.x + ctm[i].pos.y * CUT_X] = false;
+				}
 			}
-			else
+			else if (player)
 				equal_card = false;
-			if (!player)
-				cturn_num--;
 			turn_num = 0;
 			next_turn--;
+		}
+		else if (!player)
+		{
+			if (equal_card)
+				turn_num = 0;
+
+			if (cturn_num > 0)
+				cturn_num--;
+			if (cturn_num == 0)
+			{
+				equal_card = false;
+				cturn_num--;
+			}
 		}
 
 		//ゲーム
@@ -183,8 +201,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 					//同じ数字なら正解の丸を表示する
 					equal_card = true;
 					next_turn = NEXT_INTERVAL;
-					cards.erase(cards.begin() + ptm[0].pos.x + ptm[0].pos.y * CUT_X);
-					cards.erase(cards.begin() + ptm[1].pos.x + ptm[1].pos.y * CUT_X);
 					turn_num++;
 				}
 				else
@@ -207,6 +223,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 					do
 					{
 						cturn_card = Random(cards.size());
+						if (cturn_card == cards.size())cturn_card--;
 						//トランプがめくられていなかったらめくる
 						if (!turn[cards[cturn_card].pos.x + cards[cturn_card].pos.y * CUT_X])
 						{
@@ -215,6 +232,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 							turn_num++;
 							cturn_num = CPU_TURN_TIME;
 							break;
+						}
+						else
+						{
+							num++;
 						}
 					} while (true);
 				}
@@ -228,8 +249,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 					//同じ数字なら正解の丸を表示する
 					equal_card = true;
 					next_turn = NEXT_INTERVAL;
-					cards.erase(cards.begin() + ctm[0].pos.x + ctm[0].pos.y * CUT_X);
-					cards.erase(cards.begin() + ctm[1].pos.x + ctm[1].pos.y * CUT_X);
 					turn_num++;
 				}
 				else
