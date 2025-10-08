@@ -51,10 +51,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 	constexpr int TURN_TIME{ 2 };			//１ターンにめくるトランプの枚数
 	constexpr int NEXT_INTERVAL{ 60 };		//次のターンまでの時間
 	constexpr int CPU_TURN_TIME{ 30 };		//ＣＰＵのトランプをめくるまでの時間
+	constexpr int CPU_MEMORY_SIZE{ 10 };	//ＣＰＵが覚えているトランプの数
 
 	//変数
 	Point mouse;							//マウスの座標
-	vector<Memory> cards;						//トランプの情報を保存用
+	vector<Memory> cards;					//トランプの情報を保存用
 	bool player = true;						//ターンチェック
 	bool turn[MAX_CARD - REVERSE_CARD];		//トランプがめくられているか
 	bool onclick = false;					//左クリックがされているか
@@ -68,15 +69,22 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 	int cpu_get = 0;						//ＣＰＵが揃えたトランプの数
 	int cturn_num = 0;						//ＣＰＵがトランプをめくるまでの時間の計測用
 	int cturn_card = 0;						//ＣＰＵがめくるトランプの数字の保存用
+	bool end = false;						//ゲームが終了しているか
 
 	int num = 0;
 
 	//画像---------------------
 	int bg;//背景
 	int cg;//丸
+	int wg;//WIN
+	int lg;//LOSE
+	int dg;//DRAW
 	//画像読み込み
 	bg = LoadGraph("image\\back.png");
 	cg = LoadGraph("image\\circle.png");
+	wg = LoadGraph("image\\win.png");
+	lg = LoadGraph("image\\lose.png");
+	dg = LoadGraph("image\\draw.png");
 
 	//画像の分割読み込み
 	//LoadDivGraph(画像ファイルポインタ、分割総数、横分割数、縦分割数、横サイズ、縦サイズ、保存配列ポインタ)
@@ -117,147 +125,193 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 		ClearDrawScreen();
 
 		//処理----------------------------------------------------------------
+		end = true;
 
-		//マウスカーソルの位置を取得
-		GetMousePoint(&mouse.x, &mouse.y);
-
-		//トランプを二枚めくった時に一時的に停止してトランプの数字を見やすくする
-		if (next_turn > 0)
+		for (int i = 0; i < MAX_CARD - REVERSE_CARD; i++)
 		{
-			next_turn--;
-		}
-		if (next_turn == 0)
-		{
-			//違うカードをめくっていたらめくったトランプを裏面に戻す
-			if (!equal_card && turn_num > TURN_TIME)
+			if (!turn[i])
 			{
-				for (int i = 0; i < TURN_TIME; i++)
+				end = false;
+				break;
+			}
+		}
+
+		if (!end)
+		{
+			//マウスカーソルの位置を取得
+			GetMousePoint(&mouse.x, &mouse.y);
+
+			//トランプを二枚めくった時に一時的に停止してトランプの数字を見やすくする
+			if (next_turn > 0)
+			{
+				next_turn--;
+			}
+			if (next_turn == 0)
+			{
+				//違うカードをめくっていたらめくったトランプを裏面に戻す
+				if (!equal_card && turn_num > TURN_TIME)
 				{
-					if (!player)
-						turn[ptm[i].pos.x + ptm[i].pos.y * CUT_X] = false;
-					else
-						turn[ctm[i].pos.x + ctm[i].pos.y * CUT_X] = false;
+					for (int i = 0; i < TURN_TIME; i++)
+					{
+						if (!player)
+							turn[ptm[i].pos.x + ptm[i].pos.y * CUT_X] = false;
+						else
+							turn[ctm[i].pos.x + ctm[i].pos.y * CUT_X] = false;
+					}
+				}
+				else if (player)
+					equal_card = false;
+				turn_num = 0;
+				next_turn--;
+			}
+			else if (!player)
+			{
+				if (equal_card)
+					turn_num = 0;
+
+				if (cturn_num > 0)
+					cturn_num--;
+				if (cturn_num == 0)
+				{
+					equal_card = false;
+					cturn_num--;
 				}
 			}
-			else if (player)
-				equal_card = false;
-			turn_num = 0;
-			next_turn--;
-		}
-		else if (!player)
-		{
-			if (equal_card)
-				turn_num = 0;
 
-			if (cturn_num > 0)
-				cturn_num--;
-			if (cturn_num == 0)
+			//ゲーム
+			if (player)
 			{
-				equal_card = false;
-				cturn_num--;
-			}
-		}
-
-		//ゲーム
-		if (player)
-		{
-			//プレイヤーのターン
-			if (turn_num < TURN_TIME)
-			{
-				//左クリックする
-				if ((GetMouseInput() & MOUSE_INPUT_LEFT) && !onclick)
+				//プレイヤーのターン
+				if (turn_num < TURN_TIME)
 				{
-					for (int y = 0; y < CUT_Y - REVERSE_CARD; y++)
+					//左クリックする
+					if ((GetMouseInput() & MOUSE_INPUT_LEFT) && !onclick)
 					{
-						for (int x = 0; x < CUT_X; x++)
+						for (int y = 0; y < CUT_Y - REVERSE_CARD; y++)
 						{
-							for (auto i = 0; i < cards.size(); i++)
+							for (int x = 0; x < CUT_X; x++)
 							{
-								if (cards[i].pos.x == x && cards[i].pos.y == y)
+								for (auto i = 0; i < cards.size(); i++)
 								{
-									Point p{ x * CARD_WIDTH + CARD_SPACE * x + CARD_START.x,y * CARD_HEIGHT + CARD_SPACE * y + CARD_START.y };
-									//Point pos{ x,y };
-									//まだめくられていないトランプをめくる
-									if (CheckOnTrump(mouse, p, CARD_WIDTH, CARD_HEIGHT) && !turn[x + y * CUT_X])
+									if (cards[i].pos.x == x && cards[i].pos.y == y)
 									{
-										turn[x + y * CUT_X] = true;
-										ptm[turn_num] = cards[i];
-										turn_num++;
-										break;
+										Point p{ x * CARD_WIDTH + CARD_SPACE * x + CARD_START.x,y * CARD_HEIGHT + CARD_SPACE * y + CARD_START.y };
+										//Point pos{ x,y };
+										//まだめくられていないトランプをめくる
+										if (CheckOnTrump(mouse, p, CARD_WIDTH, CARD_HEIGHT) && !turn[x + y * CUT_X])
+										{
+											turn[x + y * CUT_X] = true;
+											ptm[turn_num] = cards[i];
+											turn_num++;
+											break;
+										}
 									}
 								}
 							}
 						}
 					}
+					onclick = (GetMouseInput() & MOUSE_INPUT_LEFT);
 				}
-				onclick = (GetMouseInput() & MOUSE_INPUT_LEFT);
+				//トランプを二回めくった
+				else if (turn_num == TURN_TIME)
+				{
+					//めくった二枚のトランプの数字を見る
+					if (CheckEqualTrump(ptm[0].card_num, ptm[1].card_num, CUT_X))
+					{
+						//同じ数字なら正解の丸を表示する
+						equal_card = true;
+						next_turn = NEXT_INTERVAL;
+						player_get += 2;
+						turn_num++;
+					}
+					else
+					{
+						//違う数字なら何も表示しない
+						next_turn = NEXT_INTERVAL;
+						turn_num++;
+						player = false;
+						ccm.push_back(ptm[0]);
+						ccm.push_back(ptm[1]);
+						if (ccm.size() > CPU_MEMORY_SIZE)
+						{
+							ccm.erase(ccm.begin(), ccm.begin() + 1);
+						}
+					}
+				}
 			}
-			//トランプを二回めくった
-			else if (turn_num == TURN_TIME)
+			else
 			{
-				//めくった二枚のトランプの数字を見る
-				if (CheckEqualTrump(ptm[0].card_num, ptm[1].card_num, CUT_X))
+				//CPUのターン
+				if (turn_num < TURN_TIME)
 				{
-					//同じ数字なら正解の丸を表示する
-					equal_card = true;
-					next_turn = NEXT_INTERVAL;
-					turn_num++;
+					if (cturn_num < 0)
+					{
+						//トランプをめくる
+						do
+						{
+							cturn_card = Random(cards.size());
+							if (cturn_card == cards.size())cturn_card--;
+							//トランプがめくられていなかったらめくる
+							if (!turn[cards[cturn_card].pos.x + cards[cturn_card].pos.y * CUT_X])
+							{
+								turn[cards[cturn_card].pos.x + cards[cturn_card].pos.y * CUT_X] = true;
+								ctm[turn_num] = cards[cturn_card];
+								turn_num++;
+								cturn_num = CPU_TURN_TIME;
+								break;
+							}
+							else
+							{
+								num++;
+							}
+						} while (true);
+					}
 				}
-				else
+				//トランプを２回めくった
+				else if (turn_num == TURN_TIME)
 				{
-					//違う数字なら何も表示しない
-					next_turn = NEXT_INTERVAL;
-					turn_num++;
-					player = false;
+					//めくった二枚のトランプの数字を見る
+					if (CheckEqualTrump(ctm[0].card_num, ctm[1].card_num, CUT_X))
+					{
+						//同じ数字なら正解の丸を表示する
+						equal_card = true;
+						cpu_get += 2;
+						turn_num++;
+					}
+					else
+					{
+						//違う数字なら何も表示しない
+						next_turn = NEXT_INTERVAL;
+						turn_num++;
+						player = true;
+						ccm.push_back(ctm[0]);
+						ccm.push_back(ctm[1]);
+						if (ccm.size() > CPU_MEMORY_SIZE)
+						{
+							ccm.erase(ccm.begin(), ccm.begin() + 1);
+						}
+					}
 				}
 			}
 		}
-		else
+
+		//ゲームが終了したら
+		if (end)
 		{
-			//CPUのターン
-			if (turn_num < TURN_TIME)
+			if (player_get > cpu_get)
 			{
-				if (cturn_num < 0)
-				{
-					//トランプをめくる
-					do
-					{
-						cturn_card = Random(cards.size());
-						if (cturn_card == cards.size())cturn_card--;
-						//トランプがめくられていなかったらめくる
-						if (!turn[cards[cturn_card].pos.x + cards[cturn_card].pos.y * CUT_X])
-						{
-							turn[cards[cturn_card].pos.x + cards[cturn_card].pos.y * CUT_X] = true;
-							ctm[turn_num] = cards[cturn_card];
-							turn_num++;
-							cturn_num = CPU_TURN_TIME;
-							break;
-						}
-						else
-						{
-							num++;
-						}
-					} while (true);
-				}
+				//win表示
+				DrawGraph(0, 0, wg, true);
 			}
-			//トランプを２回めくった
-			else if (turn_num == TURN_TIME)
+			if (player_get < cpu_get)
 			{
-				//めくった二枚のトランプの数字を見る
-				if (CheckEqualTrump(ctm[0].card_num, ctm[1].card_num, CUT_X))
-				{
-					//同じ数字なら正解の丸を表示する
-					equal_card = true;
-					next_turn = NEXT_INTERVAL;
-					turn_num++;
-				}
-				else
-				{
-					//違う数字なら何も表示しない
-					next_turn = NEXT_INTERVAL;
-					turn_num++;
-					player = true;
-				}
+				//lose表示
+				DrawGraph(0, 0, lg, true);
+			}
+			if (player_get == cpu_get)
+			{
+				//draw表示
+				DrawGraph(0, 0, dg, true);
 			}
 		}
 
@@ -284,6 +338,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 		{
 			DrawGraph(0, 0, cg, true);
 		}
+
+		//プレイヤーのスコア表示
+		DrawFormatString(100,650,GetColor(255,255,255),"SCORE = %d",player_get);
+
+		//ＣＰＵのスコア表示
+		DrawFormatString(950, 650, GetColor(255, 255, 255), "SCORE = %d", cpu_get);
 
 		//--------------------------------------------------------------------
 
