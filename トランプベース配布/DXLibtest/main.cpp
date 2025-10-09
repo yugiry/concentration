@@ -70,6 +70,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 	int cturn_num = 0;						//ＣＰＵがトランプをめくるまでの時間の計測用
 	int cturn_card = 0;						//ＣＰＵがめくるトランプの数字の保存用
 	bool end = false;						//ゲームが終了しているか
+	bool do_remember = false;				//覚えてるカードの中に同じ数字のカードがあったか
 
 	int num = 0;
 
@@ -246,11 +247,29 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 				{
 					if (cturn_num < 0)
 					{
+						//二枚目をめくる時
+						if (turn_num == 1)
+						{
+							//記憶したトランプを思い出す
+							for (int i = 0; i < ccm.size(); i++)
+							{
+								if ((ctm[0].card_num % CUT_X == ccm[i].card_num % CUT_X) && !turn[ccm[i].card_num])
+								{
+									do_remember = true;
+									cturn_card = ccm[i].pos.x + ccm[i].pos.y * CUT_X;
+									ccm.erase(ccm.begin() + i);
+									break;
+								}
+							}
+						}
 						//トランプをめくる
 						do
 						{
-							cturn_card = Random(cards.size());
-							if (cturn_card == cards.size())cturn_card--;
+							if (!do_remember)
+							{
+								cturn_card = Random(cards.size());
+								if (cturn_card == cards.size())cturn_card--;
+							}
 							//トランプがめくられていなかったらめくる
 							if (!turn[cards[cturn_card].pos.x + cards[cturn_card].pos.y * CUT_X])
 							{
@@ -258,6 +277,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 								ctm[turn_num] = cards[cturn_card];
 								turn_num++;
 								cturn_num = CPU_TURN_TIME;
+								if (do_remember)
+									do_remember = false;
 								break;
 							}
 							else
@@ -330,6 +351,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 				//めくられていたら表面を表示
 				else
 					DrawGraph(x * CARD_WIDTH + CARD_SPACE * x + CARD_START.x, y * CARD_HEIGHT + CARD_SPACE * y + CARD_START.y, tg[cards[x + y * CUT_X].card_num], true);
+					DrawFormatString(x* CARD_WIDTH + CARD_SPACE * x + CARD_START.x + 5, y* CARD_HEIGHT + CARD_SPACE * y + CARD_START.y + 5, GetColor(255, 0, 0), "%d", cards[x + y * CUT_X].card_num);
 			}
 		}
 
