@@ -73,6 +73,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 	bool do_remember = false;				//覚えてるカードの中に同じ数字のカードがあったか
 
 	int num = 0;
+	Memory a;
 
 	//画像---------------------
 	int bg;//背景
@@ -134,6 +135,14 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 			{
 				end = false;
 				break;
+			}
+		}
+
+		if (end)
+		{
+			if (!player)
+			{
+				cpu_get += 2;
 			}
 		}
 
@@ -235,7 +244,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 						ccm.push_back(ptm[1]);
 						if (ccm.size() > CPU_MEMORY_SIZE)
 						{
-							ccm.erase(ccm.begin(), ccm.begin() + 1);
+							for (; ccm.size() > CPU_MEMORY_SIZE;)
+							{
+								ccm.erase(ccm.begin());
+							}
 						}
 					}
 				}
@@ -253,10 +265,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 							//記憶したトランプを思い出す
 							for (int i = 0; i < ccm.size(); i++)
 							{
-								if ((ctm[0].card_num % CUT_X == ccm[i].card_num % CUT_X) && !turn[ccm[i].card_num])
+								if ((ctm[0].card_num % CUT_X == ccm[i].card_num % CUT_X) && !turn[ccm[i].pos.x + ccm[i].pos.y * CUT_X] && ctm[0].card_num != ccm[i].card_num)
 								{
 									do_remember = true;
 									cturn_card = ccm[i].pos.x + ccm[i].pos.y * CUT_X;
+									a = ccm[i];
 									ccm.erase(ccm.begin() + i);
 									break;
 								}
@@ -269,11 +282,23 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 							{
 								cturn_card = Random(cards.size());
 								if (cturn_card == cards.size())cturn_card--;
+
+								if (turn[cturn_card])
+								{
+									for (int i = 0; i < ccm.size(); i++)
+									{
+										if (cards[cturn_card].card_num == ccm[i].card_num)
+										{
+											ccm.erase(ccm.begin() + i);
+											break;
+										}
+									}
+								}
 							}
 							//トランプがめくられていなかったらめくる
-							if (!turn[cards[cturn_card].pos.x + cards[cturn_card].pos.y * CUT_X])
+							if (!turn[cturn_card])
 							{
-								turn[cards[cturn_card].pos.x + cards[cturn_card].pos.y * CUT_X] = true;
+								turn[cturn_card] = true;
 								ctm[turn_num] = cards[cturn_card];
 								turn_num++;
 								cturn_num = CPU_TURN_TIME;
@@ -309,30 +334,13 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 						ccm.push_back(ctm[1]);
 						if (ccm.size() > CPU_MEMORY_SIZE)
 						{
-							ccm.erase(ccm.begin(), ccm.begin() + 1);
+							for (; ccm.size() > CPU_MEMORY_SIZE;)
+							{
+								ccm.erase(ccm.begin());
+							}
 						}
 					}
 				}
-			}
-		}
-
-		//ゲームが終了したら
-		if (end)
-		{
-			if (player_get > cpu_get)
-			{
-				//win表示
-				DrawGraph(0, 0, wg, true);
-			}
-			if (player_get < cpu_get)
-			{
-				//lose表示
-				DrawGraph(0, 0, lg, true);
-			}
-			if (player_get == cpu_get)
-			{
-				//draw表示
-				DrawGraph(0, 0, dg, true);
 			}
 		}
 
@@ -366,6 +374,26 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 
 		//ＣＰＵのスコア表示
 		DrawFormatString(950, 650, GetColor(255, 255, 255), "SCORE = %d", cpu_get);
+
+		//ゲームが終了したら
+		if (end)
+		{
+			if (player_get > cpu_get)
+			{
+				//win表示
+				DrawGraph(0, 0, wg, true);
+			}
+			if (player_get < cpu_get)
+			{
+				//lose表示
+				DrawGraph(0, 0, lg, true);
+			}
+			if (player_get == cpu_get)
+			{
+				//draw表示
+				DrawGraph(0, 0, dg, true);
+			}
+		}
 
 		//--------------------------------------------------------------------
 
