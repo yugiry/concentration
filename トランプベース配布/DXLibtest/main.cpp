@@ -71,6 +71,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 	int cturn_card = 0;						//ＣＰＵがめくるトランプの数字の保存用
 	bool end = false;						//ゲームが終了しているか
 	bool do_remember = false;				//覚えてるカードの中に同じ数字のカードがあったか
+	bool get_end = false;
 
 	int num = 0;
 	Memory a;
@@ -140,9 +141,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 
 		if (end)
 		{
-			if (!player)
+			if (!player && !get_end)
 			{
 				cpu_get += 2;
+				get_end = true;
 			}
 		}
 
@@ -366,7 +368,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 		//同じトランプをめくっていたら正解の丸を表示
 		if (equal_card)
 		{
-			DrawGraph(0, 0, cg, true);
+			DrawGraph(1280 / 2 - 200 / 2, 720 / 2 - 200 / 2, cg, true);
 		}
 
 		//プレイヤーのスコア表示
@@ -381,17 +383,17 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_  HINSTANCE hPrevInstance,
 			if (player_get > cpu_get)
 			{
 				//win表示
-				DrawGraph(0, 0, wg, true);
+				DrawGraph(1280 / 2 - 500 / 2, 720 / 2 - 200 / 2, wg, true);
 			}
 			if (player_get < cpu_get)
 			{
 				//lose表示
-				DrawGraph(0, 0, lg, true);
+				DrawGraph(1280 / 2 - 500 / 2, 720 / 2 - 200 / 2, lg, true);
 			}
 			if (player_get == cpu_get)
 			{
 				//draw表示
-				DrawGraph(0, 0, dg, true);
+				DrawGraph(1280 / 2 - 500 / 2, 720 / 2 - 200 / 2, dg, true);
 			}
 		}
 
